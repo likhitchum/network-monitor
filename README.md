@@ -169,11 +169,31 @@ docker run --rm -v "$PWD/backend:/src" -w /src python:3.12-slim \
   bash -c "pip install -q -r requirements.txt -r requirements-dev.txt && python -m pytest"
 ```
 
+### E2E tests (Playwright — 13 เคส)
+
+ทดสอบ flow หลักผ่าน browser จริง กับ stack จริง (nginx + FastAPI + SQLite ผ่าน docker compose): login (รวม wrong password / logout), เพิ่ม device ผ่าน modal, check-now (ping 127.0.0.1 ใน container), device down → alert → resolve, role ของ user มองไม่เห็น management views, save thresholds, save SMTP โดย password ว่างไม่ทับค่าเดิม (regression) และ i18n toggle สองทิศ
+
+```bash
+docker compose up -d --build --wait   # stack ต้องรันก่อน
+
+cd e2e
+npm ci
+npx playwright install chromium
+E2E_ADMIN_EMAIL=admin@example.com E2E_ADMIN_PASSWORD=<รหัสผ่านจริงของแอดมิน> \
+  npx playwright test
+```
+
+- ชุดทดสอบ pin ภาษา UI เป็นอังกฤษเอง (`localStorage['networkpulse-language']='en'` ก่อนโหลดหน้า) เพื่อให้ assertion ไม่ขึ้นกับภาษาที่เคยเลือกไว้
+- ทุก test สร้าง device ของตัวเองด้วยชื่อ prefix `E2E` และลบทิ้งหลังจบ (cleanup ผ่าน API) — รันซ้ำได้ไม่สะสมขยะ
+- ตัวเลือก: `E2E_BASE_URL` (default `http://localhost:8080`), `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` สำหรับเคส role
+- รายงาน HTML อยู่ที่ `e2e/playwright-report/` (`npx playwright show-report`)
+
 ### CI (GitHub Actions — ทุก push / PR)
 
 1. **pytest job** — Python 3.12 (cache pip) → รัน tests พร้อม `--cov-fail-under=75` (ปัจจุบัน 93%) → อัปโหลด `coverage.xml` เป็น artifact + ไป Codecov
 2. **docker-build job** (`needs: pytest`) — build ทั้ง frontend และ backend image (`push: false`, cache type=gha) ยืนยันว่า Dockerfile build ผ่านเสมอ
 3. **smoke-test job** (`needs: pytest`) — `docker compose up -d --build --wait` ประกอบ stack จริง → ยิง `/api/health` ผ่าน nginx → login end-to-end → `down -v` เก็บกวาด
+4. **e2e-test job** (`needs: pytest`) — Playwright (Chromium) รันชุด E2E ทั้ง 13 เคสกับ stack จริงจาก compose (cache npm + Playwright browsers) → อัปโหลดรายงาน HTML เป็น artifact เมื่อ fail ก็ได้ (`if: always()`)
 
 ## การป้องกัน branch `main` (Branch protection)
 

@@ -19,8 +19,13 @@ htmlcov/
 *.db
 *.sqlite3
 
-# --- Frontend / Node (สำรองไว้ถ้าเพิ่ม tooling ภายหลัง) ---
+# --- Frontend / Node ---
 node_modules/
+
+# --- E2E (Playwright) ---
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
 
 # --- Editor / OS ---
 .vscode/

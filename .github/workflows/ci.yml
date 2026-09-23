@@ -121,3 +121,57 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    needs: pytest
+    env:
+      APP_SECRET: ci-secret-0123456789abcdef0123456789abcdef
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: ci-admin-pass-1234
+      USER_EMAIL: user@example.com
+      USER_PASSWORD: ci-user-pass-1234
+      E2E_ADMIN_EMAIL: admin@example.com
+      E2E_ADMIN_PASSWORD: ci-admin-pass-1234
+      E2E_USER_EMAIL: user@example.com
+      E2E_USER_PASSWORD: ci-user-pass-1234
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+
+      - name: Install dependencies and browser
+        run: |
+          cd e2e
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Start full stack (nginx + FastAPI + SQLite)
+        run: docker compose up -d --build --wait
+
+      - name: Run Playwright E2E tests
+        run: |
+          cd e2e
+          npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

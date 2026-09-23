@@ -1,0 +1,53 @@
+services:
+  network-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: networkpulse-monitor
+    depends_on:
+      networkpulse-api:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+  networkpulse-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: networkpulse-api
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_SECRET: ${APP_SECRET:-dev-only-change-me}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      USER_EMAIL: ${USER_EMAIL:-user@example.com}
+      USER_PASSWORD: ${USER_PASSWORD:-user123}
+      DATABASE_PATH: /data/networkpulse.db
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      CHECK_TICK_SECONDS: ${CHECK_TICK_SECONDS:-5}
+      MAX_CONCURRENT_CHECKS: ${MAX_CONCURRENT_CHECKS:-10}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      METRICS_RETENTION_DAYS: ${METRICS_RETENTION_DAYS:-30}
+      RETENTION_SWEEP_HOURS: ${RETENTION_SWEEP_HOURS:-24}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      ALERT_RECIPIENTS: ${ALERT_RECIPIENTS:-}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+    volumes:
+      - networkpulse-data:/data
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  networkpulse-data:

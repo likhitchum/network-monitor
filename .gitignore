@@ -1,0 +1,33 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Environment / secrets (เก็บเฉพาะ .env.example เป็น template) ---
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# --- Local data ---
+*.db
+*.sqlite3
+
+# --- Frontend / Node (สำรองไว้ถ้าเพิ่ม tooling ภายหลัง) ---
+node_modules/
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Tooling ของเครื่องนี้ ---
+.freebuff/

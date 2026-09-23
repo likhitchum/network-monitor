@@ -1,0 +1,6 @@
+# Normalize line endings: repo always stores LF
+* text=auto
+
+# Shell scripts and configs that must stay LF even on Windows checkouts
+*.sh text eol=lf
+nginx.conf text eol=lf

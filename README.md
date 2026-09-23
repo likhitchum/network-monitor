@@ -232,7 +232,15 @@ docker run --rm -v "$PWD/backend:/src" -w /src python:3.12-slim \
     ├── requirements-dev.txt   # pytest/pytest-asyncio/pytest-cov เฉพาะ dev
     ├── pytest.ini             # asyncio_mode=auto + coverage config
     ├── app/
-    │   └── main.py            # backend ทั้งหมดอยู่ในไฟล์เดียว (~770 บรรทัด)
+    ├── app/
+    │   ├── main.py            # จุดเริ่ม: app + lifespan + CORS + re-export (monkeypatch surface)
+    │   ├── config.py          # environment ทั้งหมด (อ่านครั้งเดียวตอน import)
+    │   ├── database.py        # SQLite: db()/now()/password hashing/init_db + migrations + seed
+    │   ├── schemas.py         # Pydantic request models
+    │   ├── probes.py          # perform_check: httpx / ping / snmpget / SSL expiry
+    │   ├── notifications.py   # SMTP (587/STARTTLS, 465/implicit TLS) + webhook
+    │   ├── pipeline.py        # persist_result (alert engine) + scheduler/retention loops
+    │   └── routers.py         # APIRouter ทั้งหมด + auth deps + validate_config
     └── tests/
         ├── conftest.py        # fixtures กลาง (client, tokens, create_device, stub)
         └── test_*.py          # 11 โมดูล 119 เคส
@@ -273,7 +281,7 @@ main.js — wire events + initial loads
 
 ยกตัวอย่างเพิ่ม type `tcp` — แตะ 4 จุด:
 
-**1. เปิด type ใน schema** (`backend/app/main.py`) — เพิ่มลง regex ทั้งสอง model:
+**1. เปิด type ใน schema** (`backend/app/schemas.py`) — เพิ่มลง regex ทั้งสอง model:
 
 ```python
 class DeviceCreate(BaseModel):
@@ -282,7 +290,7 @@ class DeviceUpdate(BaseModel):
     monitor_type: str | None = Field(default=None, pattern="^(http|https|ping|vpn|snmp|tcp)$")
 ```
 
-**2. เพิ่ม branch ใน `perform_check()`** — ต้องคืน dict ตาม shape เดิม:
+**2. เพิ่ม branch ใน `perform_check()`** (`backend/app/probes.py`) — ต้องคืน dict ตาม shape เดิม:
 
 ```python
 elif device["monitor_type"] == "tcp":

@@ -206,7 +206,7 @@ docker run --rm -v "$PWD/backend:/src" -w /src python:3.12-slim \
 ### โครงสร้างไฟล์
 
 ```
-├── index.html                 # โครงหน้าเว็บ (login, dashboard, modal)
+├── index.html                 # โครงหน้าเว็บ (login, dashboard, modal) + cache-busting ?v=
 ├── js/                        # native ES modules ฝั่ง frontend (ไม่มี bundler)
 │   ├── main.js                # จุดเริ่ม (entry) — wire controls + initial loads
 │   ├── api.js                 # apiFetch + session storage (Bearer token, 401 handling)
@@ -238,6 +238,37 @@ docker run --rm -v "$PWD/backend:/src" -w /src python:3.12-slim \
         └── test_*.py          # 11 โมดูล 119 เคส
 ```
 
+### สถาปัตยกรรม frontend (ES modules)
+
+Frontend เป็น native ES modules ไม่มี bundler — index.html โหลด entry เดียวคือ `js/main.js?v=15` ที่เหลือถูกดึงผ่าน `import` โครง dependency เป็นชั้น ๆ **ห้ามวนกลับ** (วงจร = SyntaxError ทำหน้าทั้งหน้าขาด):
+
+```
+utils.js · api.js · toast.js           ← leaf: ห้าม import โมดูลอื่นใน js/
+        ▲
+devices · alerts · maps · summary · reports · settings · i18n
+        ▲
+views.js (view templates + router) · auth.js (login / restore session)
+        ▲
+main.js — wire events + initial loads
+```
+
+กติกาเวลาแก้ frontend:
+
+1. **API ทุก call ต้องผ่าน `apiFetch()`** (js/api.js) — แนบ Bearer token จาก session storage (`networkpulse-session`), parse JSON, throw `Error(data.detail)` เมื่อ response ไม่ ok และจัดการ 401 เอง (เคลียร์ session + reload เฉพาะเมื่อ app shell แสดงอยู่ — กันลูป reload ตอนยังอยู่หน้า login) — **ห้ามเรียก `fetch()` ตรง ๆ และห้าม monkey-patch**
+2. **XSS: ข้อมูลจาก API ทุกชิ้นก่อนเข้า HTML ต้องผ่าน `escapeHtml()`** และค่าที่เป็น class attribute ต้องผ่าน `safeClass(value, allowed, fallback)` (js/utils.js) — ห้าม interpolate ตรง ๆ แม้แต่ id/ชื่อ
+3. **Template ซ้ำหลอมเป็น helper เดียว** — แถว alert ทั้ง 3 ที่ (dashboard / หน้า Alerts / notification popover) render ผ่าน `alertRowHTML(alert, {variant, resolveButton, arrow})` จาก js/alerts.js เท่านั้น — escape อยู่ที่เดียวครอบทุกจุด แก้ครั้งเดียวมีผลทั้ง 3 ที่ ห้าม copy markup
+4. **สถานะอุปกรณ์มาจาก `deviceStatus()` จุดเดียว** — mapping backend status → badge (`online/warning/critical/paused/unknown`) ทั้งตารางและแผนผังต้องเรียกตัวเดียวกัน ไม่งั้นสองที่เห็นสถานะไม่ตรงกัน
+5. **แต่ละโมดูลถือ state ของตัวเอง** — เช่น `devices` อยู่ใน devices.js, `mapNodes`/`currentMapId` อยู่ใน maps.js — โมดูลอื่นเข้าถึงผ่าน exported functions เท่านั้น และทุกชื่อใน `export {}` ต้องมีการประกาศจริงในไฟล์ (ลืมประกาศ = `Export 'x' is not defined` พังทันทีตั้งแต่โหลด)
+6. **เพิ่ม feature ใหม่** — สร้าง `js/<feature>.js` (state + fetch + render ในไฟล์เดียว) → เพิ่ม template ใน `viewContent` ของ views.js → wire event ใน `openView()` หรือ main.js — import ให้ครบทุกตัวที่ใช้ (บั๊กล่าสุดคือเรียก `showToast` โดยไม่ import)
+7. **แก้ JS/CSS แล้ว bump `?v=`** ใน index.html (`js/main.js?v=` และ `styles.css?v=`) — นี่คือกลไก cache-busting เดียวของระบบ (nginx เสิร์ฟ static แบบ cache ยาว)
+8. **ตรวจก่อน commit** — syntax ทุกไฟล์ที่แก้: `node --check js/<file>.js` หรือครบชุดใน container:
+
+   ```bash
+   docker run --rm -v "$PWD/js:/app" -w /app node:22-alpine sh -c "for f in *.js; do node --check \$f; done"
+   ```
+
+   ส่วนพฤติกรรมยืนยันด้วย smoke แบบเดียวกับ CI job `smoke-test` (compose ขึ้นจริง + login E2E) — frontend ยังไม่มี unit test ของตัวเอง
+
 ### วิธีเพิ่ม monitor type ใหม่ (ตัวอย่าง: TCP port check)
 
 ยกตัวอย่างเพิ่ม type `tcp` — แตะ 4 จุด:
@@ -265,7 +296,7 @@ elif device["monitor_type"] == "tcp":
 
 ข้อบังคับของผลลัพธ์: `status` เป็นหนึ่งใน `up|warning|down|unknown` (exception ใด ๆ ใน try = `down` อัตโนมัติจาก catch ด้านนอก), `response_ms` ถูกวัดให้เองท้ายฟังก์ชัน, ส่วนที่เหลือ (`status_code/ssl_days_left/error/sensors`) ใส่ได้ตามความเหมาะสม — `persist_result()` จะจัดการ alert + notification ต่อให้เอง
 
-**3. ฝั่ง frontend** (`js/` แบบ ES modules) — โครง dependency แบบไร้วงจร: `utils/api/toast` เป็น leaf → feature modules (`devices/alerts/maps/reports/settings/i18n`) → `views/auth` → `main.js` เป็น entry เดียวที่ index.html โหลดด้วย `<script type="module">` — การเพิ่ม monitor type ใหม่ยังแตะ 2 จุดเดิม แต่ไฟล์ที่เกี่ยวคือ `js/devices.js` (ไอคอน) และ form ใน index.html
+**3. ฝั่ง frontend** (`js/` แบบ ES modules — โครง dependency และกติกาดู "สถาปัตยกรรม frontend" ด้านบน) — แตะ 3 จุด: option ใน select ของ form (index.html), `typeMap` ใน submit handler ของ js/main.js และไอคอนใน `deviceView()` ของ js/devices.js (ถ้ามี sensor ให้เติมการแสดงผลใน `sensorSummary()` ไฟล์เดียวกัน)
 
 ```js
 // deviceView(): เลือกไอคอน (server/switch/router)

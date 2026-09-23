@@ -2,10 +2,10 @@
 
 Self-hosted network monitoring dashboard (แนวทางเดียวกับ PRTG / UptimeRobot) — backend FastAPI + SQLite, frontend vanilla JS บน nginx, deploy ด้วย Docker Compose
 
-![CI](https://img.shields.io/github/actions/workflow/status/OWNER/REPO/ci.yml?branch=main&label=CI)
-![Coverage](https://img.shields.io/codecov/c/github/OWNER/REPO/main)
+![CI](https://img.shields.io/github/actions/workflow/status/likhitchum/network-monitor/ci.yml?branch=main&label=CI)
+![Coverage](https://img.shields.io/codecov/c/github/likhitchum/network-monitor/main)
 
-> ⚠️ แก้ `OWNER/REPO` ใน badge ด้านบนเป็นที่อยู่ GitHub จริงหลัง push ขึ้น remote
+> ⚠️ แก้ `likhitchum/network-monitor` ใน badge ด้านบนเป็นที่อยู่ GitHub จริงหลัง push ขึ้น remote
 
 ## คุณสมบัติ
 

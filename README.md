@@ -2,7 +2,7 @@
 
 Self-hosted network monitoring dashboard (แนวทางเดียวกับ PRTG / UptimeRobot) — backend FastAPI + SQLite, frontend vanilla JS บน nginx, deploy ด้วย Docker Compose
 
-![CI](https://img.shields.io/github/actions/workflow/status/OWNER/REPO/backend-tests.yml?branch=main&label=CI)
+![CI](https://img.shields.io/github/actions/workflow/status/OWNER/REPO/ci.yml?branch=main&label=CI)
 ![Coverage](https://img.shields.io/codecov/c/github/OWNER/REPO/main)
 
 > ⚠️ แก้ `OWNER/REPO` ใน badge ด้านบนเป็นที่อยู่ GitHub จริงหลัง push ขึ้น remote
@@ -173,6 +173,33 @@ docker run --rm -v "$PWD/backend:/src" -w /src python:3.12-slim \
 
 1. **pytest job** — Python 3.12 (cache pip) → รัน tests พร้อม `--cov-fail-under=75` (ปัจจุบัน 93%) → อัปโหลด `coverage.xml` เป็น artifact + ไป Codecov
 2. **docker-build job** (`needs: pytest`) — build ทั้ง frontend และ backend image (`push: false`, cache type=gha) ยืนยันว่า Dockerfile build ผ่านเสมอ
+3. **smoke-test job** (`needs: pytest`) — `docker compose up -d --build --wait` ประกอบ stack จริง → ยิง `/api/health` ผ่าน nginx → login end-to-end → `down -v` เก็บกวาด
+
+## การป้องกัน branch `main` (Branch protection)
+
+หลัง push ขึ้น GitHub แล้ว แนะนำล็อก `main` ให้ merge ได้เฉพาะเมื่อ CI ผ่านทุก job — เลือกตั้งอย่างใดอย่างหนึ่งจากสองวิธี:
+
+### วิธีที่ 1: Branch protection rules (คลาสสิก)
+1. repo → **Settings** → **Branches** (หมวด "Rules")
+2. **Add branch protection rule**
+3. **Branch name pattern**: `main`
+4. เปิดตัวเลือก:
+   - ✅ **Require a pull request before merging** — ปฏิเสธ push ตรงเข้า main (repo คนเดียวที่ไม่อยาก review ตัวเอง ข้ามข้อนี้ได้ แต่จะเหลือแค่กัน merge ตอน CI แดง)
+   - ✅ **Require status checks to pass before merging** → ค้นและเลือก 3 check: `pytest`, `docker-build`, `smoke-test` (ชื่อ = job id ใน `.github/workflows/ci.yml`)
+   - ✅ **Require branches to be up to date before merging** — กัน merge ทับ commit ใหม่ที่ CI ยังไม่ได้เทส
+   - (แนะนำ) ✅ **Require conversation resolution before merging**
+5. **Create** — เสร็จ ทดสอบ: ลองแก้ไฟล์ทำ test พังแล้วเปิด PR ปุ่ม Merge จะล็อก
+
+### วิธีที่ 2: Rulesets (ใหม่กว่า, GitHub แนะนำ)
+1. **Settings** → **Rules** → **Rulesets** → **New ruleset** → **Branch ruleset**
+2. ชื่อ เช่น `protect-main` + **Enforcement status: Active**
+3. **Target branches** → Add a target → ชื่อ branch: `main`
+4. เปิด **Require status checks to pass** → เพิ่ม `pytest`, `docker-build`, `smoke-test`
+5. (ทางเลือก) เปิด **Require a pull request before merging** + **Block force pushes** → **Create ruleset**
+
+ข้อแตกต่างที่ควรรู้: Rulesets มี **Bypass list** ระบุชัดว่าใคร (เช่น admin) ข้ามกฎได้ และใช้กับ tag ได้ด้วย — ถ้าตั้งทั้งสองแบบซ้อนกันกฎจะบังคับรวมกันทั้งคู่ จึงควรเลือกอย่างใดอย่างหนึ่ง
+
+> 💡 ถ้าลิสต์ status checks ยังว่างเปล่า: GitHub แสดงเฉพาะ check ที่รันบน repo ภายใน ~7 วัน — push (หรือ re-run workflow) อย่างน้อยหนึ่งรอบก่อน แล้วค่อยกลับมาเลือก
 
 ## Development Guide
 

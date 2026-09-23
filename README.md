@@ -21,7 +21,7 @@ Self-hosted network monitoring dashboard (แนวทางเดียวก�
 ```
                  ┌────────────────────────────────────────────┐
    Browser ─────►│  nginx (frontend, :8080)                   │
-                 │  • static: index.html / app.js / styles.css│
+                 │  • static: index.html / js/* / styles.css│
                  │  • proxy /api/* → networkpulse-api:8000    │
                  │  • security headers, cache policy          │
                  └──────────────┬─────────────────────────────┘
@@ -105,7 +105,7 @@ services:
   network-monitor:
     volumes:
       - ./index.html:/usr/share/nginx/html/index.html
-      - ./app.js:/usr/share/nginx/html/app.js
+      - ./js:/usr/share/nginx/html/js
       - ./styles.css:/usr/share/nginx/html/styles.css
   networkpulse-api:
     environment:
@@ -207,7 +207,20 @@ docker run --rm -v "$PWD/backend:/src" -w /src python:3.12-slim \
 
 ```
 ├── index.html                 # โครงหน้าเว็บ (login, dashboard, modal)
-├── app.js                     # logic ฝั่ง frontend ทั้งหมด (fetch, views, i18n, maps)
+├── js/                        # native ES modules ฝั่ง frontend (ไม่มี bundler)
+│   ├── main.js                # จุดเริ่ม (entry) — wire controls + initial loads
+│   ├── api.js                 # apiFetch + session storage (Bearer token, 401 handling)
+│   ├── utils.js               # escapeHtml / safeClass / deviceStatus
+│   ├── toast.js               # toast notifications
+│   ├── devices.js             # device list state + table + check-now
+│   ├── alerts.js              # alertRowHTML helper + dashboard/alerts/notifications
+│   ├── maps.js                # topology editor + drag + layout persistence
+│   ├── summary.js             # dashboard stats + donut
+│   ├── reports.js             # report view data
+│   ├── settings.js            # thresholds + SMTP handlers
+│   ├── i18n.js                # TH/EN translation maps + language switching
+│   ├── views.js               # view templates + view router
+│   └── auth.js                # login/logout + session restore ผ่าน /api/me
 ├── styles.css
 ├── nginx.conf                 # static + proxy /api/* → backend + security headers
 ├── Dockerfile                 # frontend image (nginx:1.27-alpine)
@@ -252,7 +265,7 @@ elif device["monitor_type"] == "tcp":
 
 ข้อบังคับของผลลัพธ์: `status` เป็นหนึ่งใน `up|warning|down|unknown` (exception ใด ๆ ใน try = `down` อัตโนมัติจาก catch ด้านนอก), `response_ms` ถูกวัดให้เองท้ายฟังก์ชัน, ส่วนที่เหลือ (`status_code/ssl_days_left/error/sensors`) ใส่ได้ตามความเหมาะสม — `persist_result()` จะจัดการ alert + notification ต่อให้เอง
 
-**3. ฝั่ง frontend** (`app.js`) — 2 จุด:
+**3. ฝั่ง frontend** (`js/` แบบ ES modules) — โครง dependency แบบไร้วงจร: `utils/api/toast` เป็น leaf → feature modules (`devices/alerts/maps/reports/settings/i18n`) → `views/auth` → `main.js` เป็น entry เดียวที่ index.html โหลดด้วย `<script type="module">` — การเพิ่ม monitor type ใหม่ยังแตะ 2 จุดเดิม แต่ไฟล์ที่เกี่ยวคือ `js/devices.js` (ไอคอน) และ form ใน index.html
 
 ```js
 // deviceView(): เลือกไอคอน (server/switch/router)
